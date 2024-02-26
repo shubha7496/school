@@ -3,6 +3,8 @@ package com.book.controller;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.book.config.MessagingConfig;
 import com.book.entity.Book;
 import com.book.exception.BooKIdNotFoundException;
 import com.book.repo.Studentrepo;
@@ -28,6 +31,9 @@ public class BookRestController {
       
       @Autowired
       private Studentrepo studentrepo;
+      
+      @Autowired
+      private RabbitTemplate template;
 
       @GetMapping("/data")
       public List<Book> getBookData() {
@@ -53,11 +59,26 @@ public class BookRestController {
          return book;
       }
 
+//      @PostMapping("/entity")
+//      public ResponseEntity<String> getEntityData(@RequestBody Book book) {
+////    	  book.setBookId(book.getBookId());
+////    	  book.setBookCost(book.getBookCost());
+////    	  book.setBookName(book.getBookName());
+//         return new ResponseEntity(studentrepo.save(book),HttpStatus.OK);
+//      }
+      
       @PostMapping("/entity")
       public ResponseEntity<String> getEntityData(@RequestBody Book book) {
-//    	  book.setBookId(book.getBookId());
-//    	  book.setBookCost(book.getBookCost());
-//    	  book.setBookName(book.getBookName());
-         return new ResponseEntity(studentrepo.save(book),HttpStatus.OK);
+          try {
+              // Save the book data to the database
+              studentrepo.save(book);
+              // Publish the book data to RabbitMQ
+              template.convertAndSend(MessagingConfig.EXCHANGE, MessagingConfig.ROUTING_KEY, book);
+              return new ResponseEntity<>("Book data saved and published to RabbitMQ", HttpStatus.OK);
+          } catch (Exception e) {
+              return new ResponseEntity<>("Failed to save or publish book data", HttpStatus.INTERNAL_SERVER_ERROR);
+          }
       }
 }
+
+
